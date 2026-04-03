@@ -83,9 +83,12 @@ jobs:
         run: |
           CODENAME=$(lsb_release -cs)
           sudo dpkg --add-architecture arm64
+          # Pin existing sources to amd64 (handles both legacy and DEB822 formats)
+          sudo sed -i 's/^deb \([^[]\)/deb [arch=amd64] \1/' /etc/apt/sources.list 2>/dev/null || true
+          sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+          # Add arm64 from ports mirror
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe" | sudo tee /etc/apt/sources.list.d/arm64-cross.list
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-updates main restricted universe" | sudo tee -a /etc/apt/sources.list.d/arm64-cross.list
-          sudo sed -i 's/^deb \([^[]\)/deb [arch=amd64] \1/' /etc/apt/sources.list 2>/dev/null || true
           sudo apt-get update -qq
           sudo apt-get install -y -qq clang llvm binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu zlib1g-dev:arm64
 
@@ -94,9 +97,12 @@ jobs:
         run: |
           CODENAME=$(lsb_release -cs)
           sudo dpkg --add-architecture armhf
+          # Pin existing sources to amd64 (handles both legacy and DEB822 formats)
+          sudo sed -i 's/^deb \([^[]\)/deb [arch=amd64] \1/' /etc/apt/sources.list 2>/dev/null || true
+          sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+          # Add armhf from ports mirror
           echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe" | sudo tee /etc/apt/sources.list.d/armhf-cross.list
           echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-updates main restricted universe" | sudo tee -a /etc/apt/sources.list.d/armhf-cross.list
-          sudo sed -i 's/^deb \([^[]\)/deb [arch=amd64] \1/' /etc/apt/sources.list 2>/dev/null || true
           sudo apt-get update -qq
           sudo apt-get install -y -qq clang llvm binutils-arm-linux-gnueabihf gcc-arm-linux-gnueabihf zlib1g-dev:armhf
 
