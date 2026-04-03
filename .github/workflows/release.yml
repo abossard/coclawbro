@@ -186,7 +186,7 @@ jobs:
 
   docker:
     name: Docker multi-arch image
-    needs: test
+    needs: [test, build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -201,6 +201,32 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
+
+      - name: Download Linux binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: coclawbro-*-linux-*
+          merge-multiple: true
+
+      - name: Prepare Docker context with pre-built binaries
+        run: |
+          mkdir -p docker-ctx/binaries/amd64 docker-ctx/binaries/arm64 docker-ctx/binaries/armv7
+          cd artifacts
+          tar xzf coclawbro-*-linux-x64.tar.gz -C ../docker-ctx/binaries/amd64/
+          tar xzf coclawbro-*-linux-arm64.tar.gz -C ../docker-ctx/binaries/arm64/
+          tar xzf coclawbro-*-linux-arm.tar.gz -C ../docker-ctx/binaries/armv7/
+          # Generate Dockerfile using pre-built binaries
+          cat > ../docker-ctx/Dockerfile << 'EOF'
+          FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble
+          ARG TARGETARCH
+          ARG TARGETVARIANT
+          WORKDIR /app
+          COPY --chmod=755 binaries/${TARGETARCH}${TARGETVARIANT}/coclawbro ./coclawbro
+          ENV ASPNETCORE_URLS=http://+:8080
+          EXPOSE 8080
+          ENTRYPOINT ["./coclawbro"]
+          EOF
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -228,7 +254,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: docker-ctx
           push: true
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           tags: ${{ steps.meta.outputs.tags }}
