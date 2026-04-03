@@ -143,6 +143,18 @@ Use the **[M]odel** selector to override which Copilot model all requests use.
 
 ## Installation
 
+### Homebrew (macOS & Linux)
+
+```bash
+brew install abossard/coclawbro/coclawbro
+```
+
+To update:
+
+```bash
+brew upgrade coclawbro
+```
+
 ### Pre-built Binaries
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/{owner}/coclawbro/releases):
