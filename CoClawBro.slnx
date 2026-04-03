@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="CoClawBro.App/CoClawBro.App.csproj" />
+  <Project Path="CoClawBro.Core/CoClawBro.Core.csproj" />
+  <Project Path="CoClawBro.Tests/CoClawBro.Tests.csproj" />
+</Solution>

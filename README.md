@@ -141,6 +141,61 @@ Use the **[M]odel** selector to override which Copilot model all requests use.
 - **Prompt caching** is disabled (not supported through the proxy)
 - **Token counts** from `/v1/messages/count_tokens` are estimates (~4 chars/token heuristic)
 
+## Installation
+
+### Pre-built Binaries
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/{owner}/coclawbro/releases):
+
+| Platform | Architecture | Download |
+|----------|-------------|----------|
+| Linux | x64 | `coclawbro-*-linux-x64.tar.gz` |
+| Linux | ARM64 | `coclawbro-*-linux-arm64.tar.gz` |
+| Linux | ARM (RPi) | `coclawbro-*-linux-arm.tar.gz` |
+| macOS | Intel | `coclawbro-*-osx-x64.tar.gz` |
+| macOS | Apple Silicon | `coclawbro-*-osx-arm64.tar.gz` |
+| Windows | x64 | `coclawbro-*-win-x64.zip` |
+| Windows | ARM64 | `coclawbro-*-win-arm64.zip` |
+
+```bash
+# Linux/macOS
+tar xzf coclawbro-*-linux-x64.tar.gz
+chmod +x coclawbro
+./coclawbro
+```
+
+### Verify Downloads
+
+Each release includes `SHA256SUMS.txt` for verification:
+
+```bash
+sha256sum -c SHA256SUMS.txt
+```
+
+## Docker
+
+### Quick Start
+
+```bash
+docker run -p 8080:8080 ghcr.io/{owner}/coclawbro:latest
+```
+
+### Docker Compose
+
+```bash
+docker compose up -d
+```
+
+### Available Tags
+
+| Tag | Description |
+|-----|-------------|
+| `latest` | Latest release |
+| `vX.Y.Z` | Specific version |
+| `X.Y` | Latest patch of major.minor |
+
+Supported architectures: `linux/amd64`, `linux/arm64`
+
 ## Development
 
 ### Prerequisites

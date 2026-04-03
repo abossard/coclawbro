@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>CoClawBro</RootNamespace>
+    <AssemblyName>coclawbro</AssemblyName>
+    <PublishAot>true</PublishAot>
+    <PublishTrimmed>true</PublishTrimmed>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <StripSymbols>true</StripSymbols>
+  </PropertyGroup>
+
+  <!-- On macOS, help the AOT linker find Homebrew native libraries -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('osx'))">
+    <LinkerArg Include="-L/opt/homebrew/opt/openssl/lib" />
+    <LinkerArg Include="-L/opt/homebrew/opt/brotli/lib" />
+    <LinkerArg Include="-L/usr/local/opt/openssl/lib" />
+    <LinkerArg Include="-L/usr/local/opt/brotli/lib" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CoClawBro.Core\CoClawBro.Core.csproj" />
+  </ItemGroup>
+
+</Project>
