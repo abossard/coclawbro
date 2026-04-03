@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/nightly/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
 WORKDIR /src
 
@@ -17,7 +17,7 @@ RUN DOTNET_RID="linux-$([ "$TARGETARCH" = "amd64" ] && echo "x64" || echo "$TARG
       -p:PublishAot=true \
       -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/nightly/runtime-deps:10.0-noble-chiseled
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled
 WORKDIR /app
 COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://+:8080
