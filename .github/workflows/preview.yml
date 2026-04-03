@@ -1,0 +1,169 @@
+name: Preview Release
+
+on:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: dotnet test --no-build -c Release --report-trx --report-trx-filename results.trx
+
+  build:
+    name: Build (${{ matrix.rid }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            os: ubuntu-latest
+            archive: tar
+          - rid: linux-arm64
+            os: ubuntu-latest
+            archive: tar
+            cross: true
+          - rid: linux-arm
+            os: ubuntu-latest
+            archive: tar
+            cross: true
+          - rid: osx-x64
+            os: macos-latest
+            archive: tar
+          - rid: osx-arm64
+            os: macos-latest
+            archive: tar
+          - rid: win-x64
+            os: windows-latest
+            archive: zip
+          - rid: win-arm64
+            os: windows-latest
+            archive: zip
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Get short SHA
+        id: version
+        shell: bash
+        run: echo "version=preview-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - name: Install cross-compilation toolchain (linux-arm64)
+        if: matrix.rid == 'linux-arm64'
+        run: |
+          sudo dpkg --add-architecture arm64
+          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/arm64-cross.list
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs) main restricted universe
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs)-updates main restricted universe
+          EOF
+          sudo sed -i 's/^deb \([^[]\)/deb [arch=amd64] \1/' /etc/apt/sources.list 2>/dev/null || true
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang llvm binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu zlib1g-dev:arm64
+
+      - name: Install cross-compilation toolchain (linux-arm)
+        if: matrix.rid == 'linux-arm'
+        run: |
+          sudo dpkg --add-architecture armhf
+          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/armhf-cross.list
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs) main restricted universe
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs)-updates main restricted universe
+          EOF
+          sudo sed -i 's/^deb \([^[]\)/deb [arch=amd64] \1/' /etc/apt/sources.list 2>/dev/null || true
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang llvm binutils-arm-linux-gnueabihf gcc-arm-linux-gnueabihf zlib1g-dev:armhf
+
+      - name: Publish AOT binary
+        run: >
+          dotnet publish CoClawBro.App/CoClawBro.App.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained
+          -p:PublishAot=true
+          -o publish/
+
+      - name: Package as tar.gz (Linux/macOS)
+        if: matrix.archive == 'tar'
+        shell: bash
+        run: |
+          cd publish
+          chmod +x coclawbro || true
+          tar -czf "../coclawbro-${{ steps.version.outputs.version }}-${{ matrix.rid }}.tar.gz" .
+
+      - name: Package as zip (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path publish\* -DestinationPath "coclawbro-${{ steps.version.outputs.version }}-${{ matrix.rid }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coclawbro-${{ matrix.rid }}
+          path: coclawbro-${{ steps.version.outputs.version }}-${{ matrix.rid }}.*
+          if-no-files-found: error
+
+  preview-release:
+    name: Update preview release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: coclawbro-*
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS.txt
+        run: |
+          cd artifacts
+          sha256sum coclawbro-* | tee SHA256SUMS.txt
+
+      - name: Update preview release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: preview
+          name: "Preview (latest master)"
+          body: |
+            ⚡ **Automatic preview build** from `master` branch.
+
+            Commit: ${{ github.sha }}
+            Built: ${{ github.event.head_commit.timestamp }}
+
+            > ⚠️ This is a pre-release build. For stable releases, see the latest [versioned release](../../releases/latest).
+          prerelease: true
+          make_latest: false
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
