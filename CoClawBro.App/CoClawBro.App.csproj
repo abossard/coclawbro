@@ -24,4 +24,8 @@
     <ProjectReference Include="..\CoClawBro.Core\CoClawBro.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="PublishAotCross" Version="1.0.0" />
+  </ItemGroup>
+
 </Project>

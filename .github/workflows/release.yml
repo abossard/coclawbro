@@ -78,33 +78,12 @@ jobs:
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Install cross-compilation toolchain (linux-arm64)
-        if: matrix.rid == 'linux-arm64'
+      - name: Install Zig (cross-compilation)
+        if: matrix.cross
         run: |
-          CODENAME=$(lsb_release -cs)
-          sudo dpkg --add-architecture arm64
-          # Pin existing sources to amd64 (handles both legacy and DEB822 formats)
-          sudo sed -i 's/^deb \([^[]\)/deb [arch=amd64] \1/' /etc/apt/sources.list 2>/dev/null || true
-          sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
-          # Add arm64 from ports mirror
-          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe" | sudo tee /etc/apt/sources.list.d/arm64-cross.list
-          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-updates main restricted universe" | sudo tee -a /etc/apt/sources.list.d/arm64-cross.list
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq clang llvm binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu zlib1g-dev:arm64
-
-      - name: Install cross-compilation toolchain (linux-arm)
-        if: matrix.rid == 'linux-arm'
-        run: |
-          CODENAME=$(lsb_release -cs)
-          sudo dpkg --add-architecture armhf
-          # Pin existing sources to amd64 (handles both legacy and DEB822 formats)
-          sudo sed -i 's/^deb \([^[]\)/deb [arch=amd64] \1/' /etc/apt/sources.list 2>/dev/null || true
-          sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
-          # Add armhf from ports mirror
-          echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe" | sudo tee /etc/apt/sources.list.d/armhf-cross.list
-          echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-updates main restricted universe" | sudo tee -a /etc/apt/sources.list.d/armhf-cross.list
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq clang llvm binutils-arm-linux-gnueabihf gcc-arm-linux-gnueabihf zlib1g-dev:armhf
+          ZIG_VERSION=0.13.0
+          curl -sSL "https://ziglang.org/builds/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" | tar -xJ
+          echo "$(pwd)/zig-linux-x86_64-${ZIG_VERSION}" >> "$GITHUB_PATH"
 
       - name: Publish AOT binary
         run: >
