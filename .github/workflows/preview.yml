@@ -95,6 +95,7 @@ jobs:
               -Wl,--discard-all) filtered+=("-Wl,--as-needed") ;;
               -Wl,-pie|-pie|-Wl,-e0x0) ;;
               -fuse-ld=*|-gz=*) ;;
+              --target=armv7-linux-gnueabihf) filtered+=("--target=arm-linux-gnueabihf") ;;
               *) filtered+=("$arg") ;;
             esac
           done
