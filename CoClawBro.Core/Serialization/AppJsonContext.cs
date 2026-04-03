@@ -68,7 +68,7 @@ namespace CoClawBro.Serialization;
 [JsonSerializable(typeof(List<OpenAiToolCall>))]
 [JsonSerializable(typeof(List<OpenAiStreamToolCall>))]
 [JsonSerializable(typeof(List<OpenAiMessage>))]
-internal partial class AppJsonContext : JsonSerializerContext
+public partial class AppJsonContext : JsonSerializerContext
 {
     private static AppJsonContext? _default;
 

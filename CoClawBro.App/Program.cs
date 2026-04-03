@@ -9,7 +9,7 @@ using Spectre.Console;
 // --- Configuration ---
 var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : 5050;
 var authToken = $"coclawbro-{Guid.NewGuid():N}"[..24];
-var defaultModel = "claude-sonnet-4";
+var defaultModel = CoClawBro.UI.ModelPreferences.LoadLastModel() ?? "claude-sonnet-4";
 
 // --- Build core modules ---
 var tokenManager = new TokenManager();
@@ -85,7 +85,7 @@ app.Use(async (ctx, next) =>
 var serverTask = app.RunAsync(cts.Token);
 
 // --- Run terminal UI on main thread ---
-var ui = new TerminalUI(tokenManager, thinking, stats, port, defaultModel, authToken, cts);
+var ui = new TerminalUI(tokenManager, copilotClient, thinking, stats, port, defaultModel, authToken, cts);
 
 try
 {

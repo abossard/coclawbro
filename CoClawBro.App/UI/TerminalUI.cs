@@ -1,8 +1,10 @@
 using CoClawBro.Auth;
 using CoClawBro.Data;
+using CoClawBro.Proxy;
 using CoClawBro.Stats;
 using CoClawBro.Thinking;
 using Spectre.Console;
+using System.Text.Json;
 
 namespace CoClawBro.UI;
 
@@ -16,6 +18,7 @@ public sealed class TerminalUI
     private static readonly TimeSpan InputPollInterval = TimeSpan.FromMilliseconds(100);
 
     private readonly TokenManager _tokenManager;
+    private readonly CopilotClient _copilot;
     private readonly ThinkingController _thinking;
     private readonly StatisticsCollector _stats;
     private readonly int _port;
@@ -23,11 +26,12 @@ public sealed class TerminalUI
     private string _currentModel;
     private readonly string _authToken;
 
-    public TerminalUI(TokenManager tokenManager, ThinkingController thinking,
+    public TerminalUI(TokenManager tokenManager, CopilotClient copilot, ThinkingController thinking,
         StatisticsCollector stats, int port, string currentModel, string authToken,
         CancellationTokenSource cts)
     {
         _tokenManager = tokenManager;
+        _copilot = copilot;
         _thinking = thinking;
         _stats = stats;
         _port = port;
@@ -183,7 +187,7 @@ public sealed class TerminalUI
             models = GetFallbackModelChoices();
 
         // Seed cursor on the previously chosen model
-        var lastModel = _currentModel;
+        var lastModel = ModelPreferences.LoadLastModel() ?? _currentModel;
         var filter    = string.Empty;
         var modelList = models.ToList();
         var seedIndex = modelList.FindIndex(
@@ -247,7 +251,7 @@ public sealed class TerminalUI
                     var chosen = filtered[cursor];
                     ModelMapper.SetGlobalModel(chosen.Id);
                     _currentModel = chosen.Id;
-                    ;
+                    ModelPreferences.SaveLastModel(chosen.Id);
                     BeginInPlaceRedraw();
                     AnsiConsole.MarkupLine($"[green]Model set to: {Markup.Escape(chosen.Id)}[/]");
                     Thread.Sleep(600);
@@ -291,10 +295,61 @@ public sealed class TerminalUI
             .ToList();
     }
 
-    private static Task<IReadOnlyList<ModelChoice>> FetchModelChoicesAsync()
+    private async Task<IReadOnlyList<ModelChoice>> FetchModelChoicesAsync()
     {
-        IReadOnlyList<ModelChoice> choices = GetFallbackModelChoices();
-        return Task.FromResult(choices);
+        var response = await _copilot.GetModelsAsync(_cts.Token);
+        var body = await response.Content.ReadAsStringAsync(_cts.Token);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Upstream returned {(int)response.StatusCode}");
+
+        using var doc = JsonDocument.Parse(body);
+        if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var choices = new List<ModelChoice>();
+        foreach (var item in data.EnumerateArray())
+        {
+            if (!item.TryGetProperty("id", out var idProp) || idProp.ValueKind != JsonValueKind.String)
+                continue;
+
+            var id = idProp.GetString();
+            if (string.IsNullOrWhiteSpace(id))
+                continue;
+
+            var contextWindow = FindInt(item,
+                "context_window",
+                "context_window_tokens",
+                "max_input_tokens",
+                "input_token_limit",
+                "max_context_tokens");
+
+            var maxOutput = FindInt(item,
+                "max_output_tokens",
+                "output_token_limit",
+                "completion_token_limit");
+
+            choices.Add(new ModelChoice(id, BuildModelLabel(id, contextWindow, maxOutput), contextWindow));
+        }
+
+        return choices
+            .GroupBy(c => c.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .OrderByDescending(c => c.ContextWindow ?? 0)
+            .ThenBy(c => c.Id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static int? FindInt(JsonElement element, params string[] keys)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return null;
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (keys.Any(k => string.Equals(k, prop.Name, StringComparison.OrdinalIgnoreCase))
+                && prop.Value.ValueKind == JsonValueKind.Number
+                && prop.Value.TryGetInt32(out var value))
+                return value;
+        }
+        return null;
     }
 
     private static IReadOnlyList<ModelChoice> GetFallbackModelChoices() =>
