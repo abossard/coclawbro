@@ -206,18 +206,17 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: coclawbro-*-linux-*
+          pattern: coclawbro-linux-*
           merge-multiple: true
 
       - name: Prepare Docker context with pre-built binaries
         run: |
           mkdir -p docker-ctx/binaries/amd64 docker-ctx/binaries/arm64 docker-ctx/binaries/armv7
-          cd artifacts
-          tar xzf coclawbro-*-linux-x64.tar.gz -C ../docker-ctx/binaries/amd64/
-          tar xzf coclawbro-*-linux-arm64.tar.gz -C ../docker-ctx/binaries/arm64/
-          tar xzf coclawbro-*-linux-arm.tar.gz -C ../docker-ctx/binaries/armv7/
-          # Generate Dockerfile using pre-built binaries
-          cat > ../docker-ctx/Dockerfile << 'EOF'
+          ls -la artifacts/
+          tar xzf artifacts/coclawbro-*-linux-x64.tar.gz -C docker-ctx/binaries/amd64/
+          tar xzf artifacts/coclawbro-*-linux-arm64.tar.gz -C docker-ctx/binaries/arm64/
+          tar xzf artifacts/coclawbro-*-linux-arm.tar.gz -C docker-ctx/binaries/armv7/
+          cat > docker-ctx/Dockerfile << 'EOF'
           FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble
           ARG TARGETARCH
           ARG TARGETVARIANT
