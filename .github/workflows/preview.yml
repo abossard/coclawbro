@@ -188,7 +188,7 @@ jobs:
           sed -i "s|sha256 \".*\" # osx-x64|sha256 \"${OSX_X64}\" # osx-x64|" Formula/coclawbro.rb
           sed -i "s|sha256 \".*\" # linux-x64|sha256 \"${LINUX_X64}\" # linux-x64|" Formula/coclawbro.rb
           sed -i "s|sha256 \".*\" # linux-arm64|sha256 \"${LINUX_ARM64}\" # linux-arm64|" Formula/coclawbro.rb
-          sed -i "s|sha256 \".*\" # linux-arm|sha256 \"${LINUX_ARM}\" # linux-arm|" Formula/coclawbro.rb
+          sed -i "s|sha256 \".*\" # linux-arm$|sha256 \"${LINUX_ARM}\" # linux-arm|" Formula/coclawbro.rb
 
           echo "Updated Formula/coclawbro.rb:"
           grep 'sha256' Formula/coclawbro.rb
