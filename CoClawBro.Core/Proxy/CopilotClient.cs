@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using CoClawBro.Auth;
 using CoClawBro.Data;
+using CoClawBro.Diagnostics;
 
 namespace CoClawBro.Proxy;
 
@@ -31,25 +32,36 @@ public sealed class CopilotClient : IDisposable
         var body = await content.ReadAsStringAsync(ct);
         var mediaType = content.Headers.ContentType?.MediaType ?? "application/json";
 
+        DebugLogger.LogRequest("POST", $"{_baseUrl}{Constants.CopilotApi.ChatCompletionsPath}",
+            body.Length);
+
         return await SendWithRetryAsync(async token =>
         {
             var req = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}{Constants.CopilotApi.ChatCompletionsPath}");
             req.Content = new StringContent(body, System.Text.Encoding.UTF8, mediaType);
             AddCopilotHeaders(req, token);
 
-            return await _http.SendAsync(req,
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var resp = await _http.SendAsync(req,
                 streaming ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead,
                 ct);
+            sw.Stop();
+            DebugLogger.LogResponse("COPILOT", (int)resp.StatusCode, sw.Elapsed);
+            return resp;
         }, ct);
     }
 
     public async Task<HttpResponseMessage> GetModelsAsync(CancellationToken ct = default)
     {
+        DebugLogger.LogRequest("GET", $"{_baseUrl}{Constants.CopilotApi.ModelsPath}");
+
         return await SendWithRetryAsync(async token =>
         {
             var req = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}{Constants.CopilotApi.ModelsPath}");
             AddCopilotHeaders(req, token);
-            return await _http.SendAsync(req, ct);
+            var resp = await _http.SendAsync(req, ct);
+            DebugLogger.LogResponse("MODELS", (int)resp.StatusCode);
+            return resp;
         }, ct);
     }
 
@@ -76,6 +88,7 @@ public sealed class CopilotClient : IDisposable
             if (response.Headers.RetryAfter?.Delta is { } retryDelta)
                 delay = retryDelta;
 
+            DebugLogger.LogRetry(attempt, MaxRetries, (int)response.StatusCode, delay);
             await Task.Delay(delay, ct);
         }
 

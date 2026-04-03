@@ -1,5 +1,6 @@
 using CoClawBro.Auth;
 using CoClawBro.Data;
+using CoClawBro.Diagnostics;
 using CoClawBro.Proxy;
 using CoClawBro.Stats;
 using CoClawBro.Thinking;
@@ -90,6 +91,10 @@ public sealed class TerminalUI
         AnsiConsole.MarkupLine($"  Token:    {tokenStatus}");
         AnsiConsole.MarkupLine($"  Model:    [cyan]{_currentModel}[/]");
         AnsiConsole.MarkupLine($"  Thinking: [cyan]{_thinking.GetStatusText()}[/]");
+        var debugStatus = DebugLogger.IsEnabled
+            ? $"[green]● Enabled[/] [dim]→ {Markup.Escape(DebugLogger.LogPath)}[/]"
+            : "[dim]○ Off[/]";
+        AnsiConsole.MarkupLine($"  Debug:    {debugStatus}");
         AnsiConsole.WriteLine();
 
         // Stats table
@@ -129,7 +134,7 @@ public sealed class TerminalUI
         }
 
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[dim][[Q]]uit  [[R]]efresh Token  [[M]]odel  [[C]]onfigure CC  [[E]]nv Export[/]");
+        AnsiConsole.MarkupLine("[dim][[Q]]uit  [[R]]efresh Token  [[M]]odel  [[C]]onfigure CC  [[E]]nv Export  [[D]]ebug[/]");
     }
 
     private async Task HandleKey(ConsoleKeyInfo key)
@@ -165,6 +170,10 @@ public sealed class TerminalUI
 
             case 'e':
                 PrintEnvExport();
+                break;
+
+            case 'd':
+                ToggleDebug();
                 break;
         }
     }
@@ -455,6 +464,24 @@ public sealed class TerminalUI
             return new string('*', value.Length);
 
         return $"{value[..6]}...{value[^4..]}";
+    }
+
+    private void ToggleDebug()
+    {
+        DebugLogger.Toggle();
+        BeginInPlaceRedraw();
+        if (DebugLogger.IsEnabled)
+        {
+            AnsiConsole.MarkupLine($"[green]Debug logging enabled[/]");
+            AnsiConsole.MarkupLine($"[dim]Log file: {Markup.Escape(DebugLogger.LogPath)}[/]");
+            AnsiConsole.MarkupLine("[dim]Tip: tail -f the log file in another terminal[/]");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[yellow]Debug logging disabled[/]");
+        }
+
+        Thread.Sleep(1200);
     }
 
     private void PrintEnvExport()

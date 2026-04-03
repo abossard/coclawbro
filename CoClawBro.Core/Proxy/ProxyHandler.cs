@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using System.Text.Json;
 using CoClawBro.Data;
+using CoClawBro.Diagnostics;
 using CoClawBro.Serialization;
 using CoClawBro.Stats;
 using CoClawBro.Thinking;
@@ -52,6 +53,8 @@ public sealed class ProxyHandler
         {
             // Parse Anthropic request
             var body = await new StreamReader(ctx.Request.Body).ReadToEndAsync();
+            DebugLogger.Log("PROXY", $"← Incoming {ctx.Request.Method} {ctx.Request.Path} ({body.Length} bytes)");
+
             var request = JsonSerializer.Deserialize(body, AppJsonContext.App.AnthropicMessagesRequest);
             if (request is null)
             {
@@ -64,6 +67,9 @@ public sealed class ProxyHandler
             isStreaming = request.Stream;
             thinkingBudget = request.Thinking?.BudgetTokens;
 
+            DebugLogger.LogProxy("→", requestModel, "pending",
+                isStreaming, thinkingBudget);
+
             // Apply thinking overrides
             request = _thinking.Process(request);
 
@@ -72,8 +78,13 @@ public sealed class ProxyHandler
             var openAiRequest = RequestTranslator.Translate(request, globalModelOverride);
             upstreamModel = openAiRequest.Model;
 
+            DebugLogger.LogProxy("↑", requestModel, upstreamModel,
+                isStreaming, thinkingBudget);
+
             // Serialize and forward
             var json = JsonSerializer.Serialize(openAiRequest, AppJsonContext.App.OpenAiChatRequest);
+            DebugLogger.LogRequest("POST", Constants.CopilotApi.ChatCompletionsPath, json.Length,
+                json.Length < 800 ? json : null);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _copilot.SendChatCompletionAsync(content, isStreaming, ctx.RequestAborted);
@@ -82,6 +93,9 @@ public sealed class ProxyHandler
             {
                 var errorBody = await response.Content.ReadAsStringAsync(ctx.RequestAborted);
                 ctx.Response.StatusCode = (int)response.StatusCode;
+                DebugLogger.LogResponse("UPSTREAM-ERR", (int)response.StatusCode,
+                    sw.Elapsed, errorBody.Length);
+                DebugLogger.Log("PROXY", $"Error body: {errorBody[..Math.Min(errorBody.Length, 500)]}");
                 await WriteAnthropicError(ctx, (int)response.StatusCode, errorBody);
                 RecordMetrics(sw, ttftSw, requestModel, upstreamModel, inputTokens, outputTokens,
                     thinkingBudget, (int)response.StatusCode, isStreaming, errorBody);
@@ -98,6 +112,8 @@ public sealed class ProxyHandler
             }
 
             // Extract token counts from response headers if available
+            DebugLogger.LogResponse("UPSTREAM-OK", 200, sw.Elapsed);
+            DebugLogger.Log("PROXY", $"Tokens in={inputTokens} out={outputTokens}");
             RecordMetrics(sw, ttftSw, requestModel, upstreamModel, inputTokens, outputTokens,
                 thinkingBudget, 200, isStreaming, null);
         }

@@ -77,7 +77,7 @@ jobs:
       - name: Get short SHA
         id: version
         shell: bash
-        run: echo "version=preview-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+        run: echo "version=preview" >> "$GITHUB_OUTPUT"
 
       - name: Install Zig cross-linker
         if: matrix.cross
@@ -140,6 +140,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -152,20 +157,48 @@ jobs:
           cd artifacts
           sha256sum coclawbro-* | tee SHA256SUMS.txt
 
-      - name: Update preview release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: preview
-          name: "Preview (latest master)"
-          body: |
-            ⚡ **Automatic preview build** from `master` branch.
+      - name: Recreate preview release
+        run: |
+          gh release delete preview --yes --cleanup-tag 2>/dev/null || true
+          gh release create preview artifacts/* \
+            --title "Preview (latest master)" \
+            --notes "⚡ **Automatic preview build** from \`master\` branch.
 
-            Commit: ${{ github.sha }}
-            Built: ${{ github.event.head_commit.timestamp }}
+          Commit: ${{ github.sha }}
+          Built: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-            > ⚠️ This is a pre-release build. For stable releases, see the latest [versioned release](../../releases/latest).
-          prerelease: true
-          make_latest: false
-          files: artifacts/*
+          > ⚠️ This is a pre-release build. For stable releases, see the latest [versioned release](../../releases/latest)." \
+            --prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew formula SHA256s
+        run: |
+          cd artifacts
+
+          OSX_ARM64=$(grep 'osx-arm64' SHA256SUMS.txt | awk '{print $1}')
+          OSX_X64=$(grep 'osx-x64' SHA256SUMS.txt | awk '{print $1}')
+          LINUX_X64=$(grep 'linux-x64' SHA256SUMS.txt | awk '{print $1}')
+          LINUX_ARM64=$(grep 'linux-arm64' SHA256SUMS.txt | awk '{print $1}')
+          LINUX_ARM=$(grep 'linux-arm\.' SHA256SUMS.txt | awk '{print $1}')
+
+          cd ..
+
+          sed -i "s|sha256 \".*\" # osx-arm64|sha256 \"${OSX_ARM64}\" # osx-arm64|" Formula/coclawbro.rb
+          sed -i "s|sha256 \".*\" # osx-x64|sha256 \"${OSX_X64}\" # osx-x64|" Formula/coclawbro.rb
+          sed -i "s|sha256 \".*\" # linux-x64|sha256 \"${LINUX_X64}\" # linux-x64|" Formula/coclawbro.rb
+          sed -i "s|sha256 \".*\" # linux-arm64|sha256 \"${LINUX_ARM64}\" # linux-arm64|" Formula/coclawbro.rb
+          sed -i "s|sha256 \".*\" # linux-arm|sha256 \"${LINUX_ARM}\" # linux-arm|" Formula/coclawbro.rb
+
+          echo "Updated Formula/coclawbro.rb:"
+          grep 'sha256' Formula/coclawbro.rb
+
+      - name: Commit formula updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/coclawbro.rb
+          git diff --cached --quiet || git commit -m "chore: update Homebrew formula SHA256s [skip ci]"
+          git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

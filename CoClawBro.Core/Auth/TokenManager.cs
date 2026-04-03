@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using CoClawBro.Data;
+using CoClawBro.Diagnostics;
 using CoClawBro.Serialization;
 using Spectre.Console;
 
@@ -65,19 +66,27 @@ public sealed class TokenManager : ITokenProvider, IDisposable
     /// </summary>
     public async Task InitializeAsync(CancellationToken ct = default)
     {
+        DebugLogger.LogAuth("Initialize", "starting");
+
         // Try loading persisted OAuth token
         if (TryLoadPersistedToken(out var persisted))
         {
+            DebugLogger.LogAuth("Initialize", "found persisted token");
             _oauthToken = persisted!.AccessToken;
             try
             {
                 await ExchangeForCopilotTokenAsync(ct);
                 await FetchUsernameAsync(ct);
+                DebugLogger.LogAuth("Initialize", $"authenticated as @{_username}");
                 return;
             }
-            catch
+            catch (Exception ex)
             {
-                AnsiConsole.MarkupLine("[yellow]Stored token expired, re-authenticating...[/]");
+                DebugLogger.LogAuth("Initialize", $"persisted token failed: {ex.Message}");
+                if (DebugLogger.Headless)
+                    Console.Error.WriteLine("Stored token expired, re-authenticating...");
+                else
+                    AnsiConsole.MarkupLine("[yellow]Stored token expired, re-authenticating...[/]");
                 DeletePersistedToken();
                 _oauthToken = null;
             }
@@ -87,6 +96,7 @@ public sealed class TokenManager : ITokenProvider, IDisposable
         await ExchangeForCopilotTokenAsync(ct);
         await FetchUsernameAsync(ct);
         PersistToken();
+        DebugLogger.LogAuth("Initialize", $"completed, authenticated as @{_username}");
     }
 
     /// <summary>
@@ -125,19 +135,49 @@ public sealed class TokenManager : ITokenProvider, IDisposable
         if (deviceCode.DeviceCode is null || deviceCode.UserCode is null)
             throw new InvalidOperationException($"Device code error: {deviceCode.Error}");
 
-        // Display auth prompt
-        AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("[bold blue]GitHub Authentication Required[/]").RuleStyle("blue"));
-        AnsiConsole.MarkupLine($"  Visit: [bold link]{deviceCode.VerificationUri}[/]");
-        AnsiConsole.MarkupLine($"  Enter code: [bold yellow]{deviceCode.UserCode}[/]");
+        DebugLogger.LogAuth("DeviceFlow", $"user_code={deviceCode.UserCode} uri={deviceCode.VerificationUri}");
+
+        // Display auth prompt — headless uses plain text
+        if (DebugLogger.Headless)
+        {
+            Console.WriteLine();
+            Console.WriteLine("=== GitHub Authentication Required ===");
+            Console.WriteLine($"  Visit: {deviceCode.VerificationUri}");
+            Console.WriteLine($"  Enter code: {deviceCode.UserCode}");
+        }
+        else
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(new Rule("[bold blue]GitHub Authentication Required[/]").RuleStyle("blue"));
+            AnsiConsole.MarkupLine($"  Visit: [bold link]{deviceCode.VerificationUri}[/]");
+            AnsiConsole.MarkupLine($"  Enter code: [bold yellow]{deviceCode.UserCode}[/]");
+        }
 
         if (TryCopyToClipboard(deviceCode.UserCode, out var clipboardMessage))
-            AnsiConsole.MarkupLine($"  [green]✓ {clipboardMessage}[/]");
+        {
+            if (DebugLogger.Headless)
+                Console.WriteLine($"  ✓ {clipboardMessage}");
+            else
+                AnsiConsole.MarkupLine($"  [green]✓ {clipboardMessage}[/]");
+        }
         else
-            AnsiConsole.MarkupLine($"  [yellow]{clipboardMessage}[/]");
+        {
+            if (DebugLogger.Headless)
+                Console.WriteLine($"  {clipboardMessage}");
+            else
+                AnsiConsole.MarkupLine($"  [yellow]{clipboardMessage}[/]");
+        }
 
-        AnsiConsole.Write(new Rule().RuleStyle("blue"));
-        AnsiConsole.WriteLine();
+        if (!DebugLogger.Headless)
+        {
+            AnsiConsole.Write(new Rule().RuleStyle("blue"));
+            AnsiConsole.WriteLine();
+        }
+        else
+        {
+            Console.WriteLine("=======================================");
+            Console.WriteLine();
+        }
 
         // Poll for token
         var interval = deviceCode.Interval;
@@ -160,7 +200,11 @@ public sealed class TokenManager : ITokenProvider, IDisposable
             if (token?.AccessToken is not null)
             {
                 _oauthToken = token.AccessToken;
-                AnsiConsole.MarkupLine("[green]✓ GitHub authentication successful![/]");
+                DebugLogger.LogAuth("DeviceFlow", "authentication successful");
+                if (DebugLogger.Headless)
+                    Console.WriteLine("✓ GitHub authentication successful!");
+                else
+                    AnsiConsole.MarkupLine("[green]✓ GitHub authentication successful![/]");
                 return;
             }
 
