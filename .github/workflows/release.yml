@@ -82,7 +82,7 @@ jobs:
         if: matrix.cross
         run: |
           ZIG_VERSION=0.13.0
-          curl -sSL "https://ziglang.org/builds/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" | tar -xJ
+          curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" | tar -xJ
           echo "$(pwd)/zig-linux-x86_64-${ZIG_VERSION}" >> "$GITHUB_PATH"
 
       - name: Publish AOT binary
