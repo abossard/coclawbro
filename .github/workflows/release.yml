@@ -31,7 +31,7 @@ jobs:
         run: dotnet restore
 
       - name: Run tests
-        run: dotnet test --no-restore --verbosity normal
+        run: dotnet test --no-restore
 
   build:
     name: Build (${{ matrix.rid }})
@@ -82,29 +82,25 @@ jobs:
         if: matrix.rid == 'linux-arm64'
         run: |
           sudo dpkg --add-architecture arm64
-          # Add arm64 sources
-          sudo tee /etc/apt/sources.list.d/arm64-cross.list <<'EOF'
-          deb [arch=arm64] http://ports.ubuntu.com/ noble main restricted universe
-          deb [arch=arm64] http://ports.ubuntu.com/ noble-updates main restricted universe
+          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/arm64-cross.list
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs) main restricted universe
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs)-updates main restricted universe
           EOF
-          # Pin the default sources to amd64 only
-          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
-          sudo apt-get update
-          sudo apt-get install -y clang llvm binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu zlib1g-dev:arm64
+          sudo sed -i 's/^deb \([^[]\)/deb [arch=amd64] \1/' /etc/apt/sources.list 2>/dev/null || true
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang llvm binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu zlib1g-dev:arm64
 
       - name: Install cross-compilation toolchain (linux-arm)
         if: matrix.rid == 'linux-arm'
         run: |
           sudo dpkg --add-architecture armhf
-          # Add armhf sources
-          sudo tee /etc/apt/sources.list.d/armhf-cross.list <<'EOF'
-          deb [arch=armhf] http://ports.ubuntu.com/ noble main restricted universe
-          deb [arch=armhf] http://ports.ubuntu.com/ noble-updates main restricted universe
+          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/armhf-cross.list
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs) main restricted universe
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -cs)-updates main restricted universe
           EOF
-          # Pin the default sources to amd64 only
-          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
-          sudo apt-get update
-          sudo apt-get install -y clang llvm binutils-arm-linux-gnueabihf gcc-arm-linux-gnueabihf zlib1g-dev:armhf
+          sudo sed -i 's/^deb \([^[]\)/deb [arch=amd64] \1/' /etc/apt/sources.list 2>/dev/null || true
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang llvm binutils-arm-linux-gnueabihf gcc-arm-linux-gnueabihf zlib1g-dev:armhf
 
       - name: Publish AOT binary
         run: >
@@ -232,7 +228,7 @@ jobs:
         with:
           context: .
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

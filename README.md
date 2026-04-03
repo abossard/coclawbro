@@ -194,7 +194,7 @@ docker compose up -d
 | `vX.Y.Z` | Specific version |
 | `X.Y` | Latest patch of major.minor |
 
-Supported architectures: `linux/amd64`, `linux/arm64`
+Supported architectures: `linux/amd64`, `linux/arm64`, `linux/arm/v7` (Raspberry Pi)
 
 ## Development
 

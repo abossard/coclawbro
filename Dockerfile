@@ -10,14 +10,14 @@ RUN dotnet restore CoClawBro.App/CoClawBro.App.csproj
 
 # Copy source and publish AOT for the target architecture
 COPY . .
-RUN DOTNET_RID="linux-$([ "$TARGETARCH" = "amd64" ] && echo "x64" || echo "$TARGETARCH")" && \
+RUN DOTNET_RID="linux-$(case "$TARGETARCH" in amd64) echo x64;; arm) echo arm;; *) echo "$TARGETARCH";; esac)" && \
     dotnet publish CoClawBro.App/CoClawBro.App.csproj \
       -c Release \
       -r "$DOTNET_RID" \
       -p:PublishAot=true \
       -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble
 WORKDIR /app
 COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://+:8080
