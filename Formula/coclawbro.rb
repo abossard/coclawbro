@@ -7,10 +7,10 @@ class Coclawbro < Formula
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/abossard/coclawbro/releases/download/preview/coclawbro-preview-osx-arm64.tar.gz"
-      sha256 "0797d706aaf671dae52a4cd5e1cd3d2eff3a32688fc0aa61130d3aa66d3decda" # osx-arm64
+      sha256 "96bbc4aa1e84f2013b26f3428185e5629fd2953fc7e3883f91d9cba46135d6b7" # osx-arm64
     else
       url "https://github.com/abossard/coclawbro/releases/download/preview/coclawbro-preview-osx-x64.tar.gz"
-      sha256 "d584c5ba0ae5d20d1ab9f664153797b349d4b6182ebf3494d78185ffdb17f3d4" # osx-x64
+      sha256 "12d06cc63ba466e338fe6d56c4a07ae523d39b552cc759cd0828d667f75f0356" # osx-x64
     end
   end
 
@@ -18,14 +18,14 @@ class Coclawbro < Formula
     if Hardware::CPU.arm?
       if Hardware::CPU.is_64_bit?
         url "https://github.com/abossard/coclawbro/releases/download/preview/coclawbro-preview-linux-arm64.tar.gz"
-        sha256 "a87aad504383438790bdba7e4bab485927c643933735247d58ed33aeb0d09433" # linux-arm64
+        sha256 "1f008ae8ff6e01214488e458be61cf134cee393017cb2a1901d3f77da28efee1" # linux-arm64
       else
         url "https://github.com/abossard/coclawbro/releases/download/preview/coclawbro-preview-linux-arm.tar.gz"
-        sha256 "dc9b5c6564d893830d05c95fd79c4f810d21a89b26cf6d25cbb8c1a16c66b159" # linux-arm
+        sha256 "be562a5366f07b8e4d078c122fc5d8ae0569bf48c178a9135dd59862ebaf3ef6" # linux-arm
       end
     else
       url "https://github.com/abossard/coclawbro/releases/download/preview/coclawbro-preview-linux-x64.tar.gz"
-      sha256 "8638f3288f152bd7f9cdb8a4aa41c033eb1655a51fb8ba3886b17dde512f0933" # linux-x64
+      sha256 "2399fc4fcae0c84928d4f8e57ba6d0754ed3d166855a76dd827a4458965d119c" # linux-x64
     end
   end
 
