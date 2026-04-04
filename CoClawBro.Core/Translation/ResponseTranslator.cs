@@ -41,6 +41,7 @@ public static class ResponseTranslator
             Content: content,
             Model: requestModel,
             StopReason: MapStopReason(choice?.FinishReason),
+            StopSequence: null,
             Usage: MapUsage(response.Usage)
         );
     }
@@ -102,7 +103,9 @@ public static class ResponseTranslator
         if (usage is null) return null;
         return new AnthropicUsage(
             InputTokens: usage.PromptTokens,
-            OutputTokens: usage.CompletionTokens
+            OutputTokens: usage.CompletionTokens,
+            CacheCreationInputTokens: 0,
+            CacheReadInputTokens: 0
         );
     }
 }

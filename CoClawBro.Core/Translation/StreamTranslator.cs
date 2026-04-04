@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using CoClawBro.Data;
+using CoClawBro.Diagnostics;
 using CoClawBro.Serialization;
 
 namespace CoClawBro.Translation;
@@ -117,6 +118,7 @@ public static class StreamTranslator
             var msg = new AnthropicMessagesResponse(
                 Id: _msgId, Type: "message", Role: "assistant",
                 Content: [], Model: _model,
+                StopSequence: null,
                 Usage: new AnthropicUsage(0, 0));
             var ev = new SseMessageStart("message_start", msg);
             return FormatEvent("message_start",
@@ -167,24 +169,35 @@ public static class StreamTranslator
                         AppJsonContext.App.SseContentBlockStop));
             }
 
-            // Emit accumulated tool_use blocks
+            // Emit accumulated tool_use blocks using the Anthropic streaming protocol:
+            // 1) content_block_start with input: {} (empty)
+            // 2) content_block_delta with input_json_delta containing the raw arguments
+            // 3) content_block_stop
             foreach (var (_, acc) in _toolAccumulators.OrderBy(kv => kv.Key))
             {
                 _blockIndex++;
-                Dictionary<string, object?>? input = null;
-                try
-                {
-                    var args = acc.Arguments.ToString();
-                    if (!string.IsNullOrEmpty(args))
-                        input = JsonSerializer.Deserialize(args, AppJsonContext.App.DictionaryStringObject);
-                }
-                catch { input = new() { ["_raw"] = acc.Arguments.ToString() }; }
+                var rawArgs = acc.Arguments.ToString();
+                var toolId = acc.Id ?? $"call_{_blockIndex}";
+                var toolName = acc.Name ?? "unknown";
 
-                var toolBlock = new ToolUseBlock(acc.Id ?? $"call_{_blockIndex}", acc.Name ?? "unknown", input);
+                DebugLogger.Log("TOOL-USE",
+                    $"id={toolId} name={toolName} args={Truncate(rawArgs, 500)}");
 
+                // Start with empty input (Anthropic protocol)
+                var emptyToolBlock = new ToolUseBlock(toolId, toolName, new Dictionary<string, object?>());
                 yield return FormatEvent("content_block_start",
-                    JsonSerializer.Serialize(new SseContentBlockStart("content_block_start", _blockIndex, toolBlock),
+                    JsonSerializer.Serialize(
+                        new SseContentBlockStart("content_block_start", _blockIndex, emptyToolBlock),
                         AppJsonContext.App.SseContentBlockStart));
+
+                // Stream the full arguments as an input_json_delta
+                if (!string.IsNullOrEmpty(rawArgs))
+                {
+                    var inputDelta = new SseInputJsonDelta("input_json_delta", rawArgs);
+                    var blockDelta = new SseContentBlockDelta("content_block_delta", _blockIndex, inputDelta);
+                    yield return FormatEvent("content_block_delta",
+                        JsonSerializer.Serialize(blockDelta, AppJsonContext.App.SseContentBlockDelta));
+                }
 
                 yield return FormatEvent("content_block_stop",
                     JsonSerializer.Serialize(new SseContentBlockStop("content_block_stop", _blockIndex),
@@ -192,8 +205,9 @@ public static class StreamTranslator
             }
 
             var anthropicUsage = usage is not null
-                ? new AnthropicUsage(usage.PromptTokens, usage.CompletionTokens)
-                : new AnthropicUsage(0, 0);
+                ? new AnthropicUsage(usage.PromptTokens, usage.CompletionTokens,
+                    CacheCreationInputTokens: 0, CacheReadInputTokens: 0)
+                : new AnthropicUsage(0, 0, CacheCreationInputTokens: 0, CacheReadInputTokens: 0);
 
             yield return FormatEvent("message_delta",
                 JsonSerializer.Serialize(new SseMessageDelta("message_delta",
@@ -219,6 +233,9 @@ public static class StreamTranslator
 
         private static string FormatEvent(string eventType, string data) =>
             $"event: {eventType}\ndata: {data}\n\n";
+
+        private static string Truncate(string s, int max) =>
+            s.Length <= max ? s : string.Concat(s.AsSpan(0, max), "…");
     }
 
     private sealed class ToolCallAccumulator

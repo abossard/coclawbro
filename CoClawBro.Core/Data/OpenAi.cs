@@ -48,7 +48,10 @@ public sealed record OpenAiChatRequest(
     [property: JsonPropertyName("max_tokens")] int? MaxTokens = null,
     [property: JsonPropertyName("stream")] bool Stream = false,
     [property: JsonPropertyName("temperature")] double? Temperature = null,
-    [property: JsonPropertyName("tools")] List<OpenAiToolDefinition>? Tools = null
+    [property: JsonPropertyName("top_p")] double? TopP = null,
+    [property: JsonPropertyName("stop")] List<string>? Stop = null,
+    [property: JsonPropertyName("tools")] List<OpenAiToolDefinition>? Tools = null,
+    [property: JsonPropertyName("tool_choice")] object? ToolChoice = null
 );
 
 // --- Usage ---

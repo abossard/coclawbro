@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CoClawBro.Data;
+using CoClawBro.Diagnostics;
 using CoClawBro.Serialization;
 
 namespace CoClawBro.Translation;
@@ -23,13 +24,20 @@ public static class RequestTranslator
 
         var tools = request.Tools?.Select(TranslateTool).ToList();
 
+        // top_k has no OpenAI equivalent — log and drop
+        if (request.TopK is not null)
+            DebugLogger.Log("TRANSLATE", $"Dropping top_k={request.TopK} (no OpenAI equivalent)");
+
         return new OpenAiChatRequest(
             Model: modelOverride ?? ModelMapper.MapToCopilot(request.Model),
             Messages: messages,
             MaxTokens: request.MaxTokens,
             Stream: request.Stream,
             Temperature: request.Temperature,
-            Tools: tools?.Count > 0 ? tools : null
+            TopP: request.TopP,
+            Stop: request.StopSequences,
+            Tools: tools?.Count > 0 ? tools : null,
+            ToolChoice: TranslateToolChoice(request.ToolChoice)
         );
     }
 
@@ -39,6 +47,17 @@ public static class RequestTranslator
         var toolResults = msg.Content.OfType<ToolResultBlock>().ToList();
         var toolUses = msg.Content.OfType<ToolUseBlock>().ToList();
         var textBlocks = msg.Content.OfType<TextBlock>().ToList();
+
+        // Log skipped block types (thinking, images, etc.) for observability
+        var skippedCount = msg.Content.Count - toolResults.Count - toolUses.Count - textBlocks.Count;
+        if (skippedCount > 0)
+        {
+            var skippedTypes = msg.Content
+                .Where(b => b is not TextBlock and not ToolUseBlock and not ToolResultBlock)
+                .Select(b => b.GetType().Name)
+                .Distinct();
+            DebugLogger.Log("TRANSLATE", $"Skipping {skippedCount} block(s) in {msg.Role} message: {string.Join(", ", skippedTypes)}");
+        }
 
         if (msg.Role == "assistant")
         {
@@ -113,5 +132,51 @@ public static class RequestTranslator
                 Parameters: tool.InputSchema
             )
         );
+    }
+
+    /// <summary>
+    /// Translates Anthropic tool_choice to OpenAI format.
+    /// Anthropic: "auto" | {"type":"auto"} | {"type":"any"} | {"type":"tool","name":"X"}
+    /// OpenAI:    "auto" | "required" | "none" | {"type":"function","function":{"name":"X"}}
+    /// </summary>
+    private static object? TranslateToolChoice(JsonElement? toolChoice)
+    {
+        if (toolChoice is null || toolChoice.Value.ValueKind == JsonValueKind.Undefined
+                               || toolChoice.Value.ValueKind == JsonValueKind.Null)
+            return null;
+
+        var tc = toolChoice.Value;
+
+        // String form: "auto", "any", "none"
+        if (tc.ValueKind == JsonValueKind.String)
+        {
+            return tc.GetString() switch
+            {
+                "any" => "required",
+                "none" => "none",
+                _ => "auto"
+            };
+        }
+
+        // Object form: {"type":"auto"}, {"type":"any"}, {"type":"tool","name":"X"}
+        if (tc.ValueKind == JsonValueKind.Object && tc.TryGetProperty("type", out var typeProp))
+        {
+            var type = typeProp.GetString();
+            if (type == "any")
+                return "required";
+            if (type == "none")
+                return "none";
+            if (type == "tool" && tc.TryGetProperty("name", out var nameProp))
+            {
+                return new Dictionary<string, object?>
+                {
+                    ["type"] = "function",
+                    ["function"] = new Dictionary<string, object?> { ["name"] = nameProp.GetString() }
+                };
+            }
+            return "auto";
+        }
+
+        return null;
     }
 }

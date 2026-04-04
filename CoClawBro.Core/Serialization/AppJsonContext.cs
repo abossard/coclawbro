@@ -23,8 +23,11 @@ namespace CoClawBro.Serialization;
 [JsonSerializable(typeof(ContentBlock))]
 [JsonSerializable(typeof(TextBlock))]
 [JsonSerializable(typeof(ThinkingBlock))]
+[JsonSerializable(typeof(RedactedThinkingBlock))]
 [JsonSerializable(typeof(ToolUseBlock))]
 [JsonSerializable(typeof(ToolResultBlock))]
+[JsonSerializable(typeof(ImageBlock))]
+[JsonSerializable(typeof(ImageSource))]
 [JsonSerializable(typeof(List<ContentBlock>))]
 // SSE event types
 [JsonSerializable(typeof(SseMessageStart))]
@@ -36,6 +39,8 @@ namespace CoClawBro.Serialization;
 [JsonSerializable(typeof(SseMessageStop))]
 [JsonSerializable(typeof(SseTextDelta))]
 [JsonSerializable(typeof(SseThinkingDelta))]
+[JsonSerializable(typeof(SseInputJsonDelta))]
+[JsonSerializable(typeof(SseSignatureDelta))]
 // OpenAI types
 [JsonSerializable(typeof(OpenAiChatRequest))]
 [JsonSerializable(typeof(OpenAiChatResponse))]
@@ -68,6 +73,7 @@ namespace CoClawBro.Serialization;
 [JsonSerializable(typeof(List<OpenAiToolCall>))]
 [JsonSerializable(typeof(List<OpenAiStreamToolCall>))]
 [JsonSerializable(typeof(List<OpenAiMessage>))]
+[JsonSerializable(typeof(List<string>))]
 public partial class AppJsonContext : JsonSerializerContext
 {
     private static AppJsonContext? _default;

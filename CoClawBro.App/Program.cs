@@ -33,6 +33,7 @@ var defaultModel = CoClawBro.UI.ModelPreferences.LoadLastModel() ?? "claude-sonn
 
 // --- Set up debug/headless modes ---
 DebugLogger.Headless = headless;
+ConsoleLogger.IsEnabled = headless;
 if (debug)
     DebugLogger.Enable();
 
@@ -109,6 +110,8 @@ var handler = new ProxyHandler(copilotClient, thinking, stats);
 handler.MapEndpoints(app);
 
 // --- Auth middleware: validate proxy token ---
+// Accept both Authorization: Bearer <token> (OpenAI/LiteLLM style)
+// and x-api-key: <token> (Anthropic native style)
 app.Use(async (ctx, next) =>
 {
     if (ctx.Request.Path.StartsWithSegments("/health"))
@@ -118,10 +121,15 @@ app.Use(async (ctx, next) =>
     }
 
     var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
-    if (authHeader is null || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+    var apiKey = ctx.Request.Headers["x-api-key"].FirstOrDefault();
+
+    if ((authHeader is null || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        && apiKey is null)
     {
         ctx.Response.StatusCode = 401;
-        await ctx.Response.WriteAsync("{\"error\":\"Missing Authorization header\"}");
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsync(
+            "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"Missing authentication. Provide Authorization: Bearer <token> or x-api-key header.\"}}");
         return;
     }
 
@@ -136,16 +144,40 @@ DebugLogger.Log("SYSTEM", $"Mode: {(headless ? "headless" : "interactive")}, Deb
 
 if (headless)
 {
-    // --- Headless mode: print connection info and wait ---
+    // --- Headless mode: print connection info and periodically log stats ---
     Console.WriteLine($"Proxy running on http://localhost:{port}");
     Console.WriteLine($"Authenticated as @{tokenManager.Username ?? "unknown"}");
     Console.WriteLine($"Model: {defaultModel}");
+    Console.WriteLine($"Auth token: {authToken[..6]}...");
     if (DebugLogger.IsEnabled)
         Console.WriteLine($"Debug log: {DebugLogger.LogPath}");
     Console.WriteLine();
-    Console.WriteLine("Press Ctrl+C to stop.");
+    Console.WriteLine("Listening for requests... (Ctrl+C to stop)");
+    Console.WriteLine();
 
-    try { await Task.Delay(Timeout.Infinite, cts.Token); }
+    var statsInterval = TimeSpan.FromSeconds(30);
+    var lastRequestCount = 0;
+
+    try
+    {
+        while (!cts.IsCancellationRequested)
+        {
+            await Task.Delay(statsInterval, cts.Token);
+
+            var currentStats = stats.GetStats();
+            if (currentStats.TotalRequests > lastRequestCount)
+            {
+                lastRequestCount = currentStats.TotalRequests;
+                ConsoleLogger.LogStats(
+                    currentStats.TotalRequests,
+                    currentStats.ActiveStreams,
+                    currentStats.TotalInputTokens,
+                    currentStats.TotalOutputTokens,
+                    currentStats.ErrorCount,
+                    currentStats.AverageLatency);
+            }
+        }
+    }
     catch (OperationCanceledException) { }
 }
 else

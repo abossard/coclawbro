@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using CoClawBro.Serialization;
 
@@ -8,8 +9,10 @@ namespace CoClawBro.Data;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(TextBlock), "text")]
 [JsonDerivedType(typeof(ThinkingBlock), "thinking")]
+[JsonDerivedType(typeof(RedactedThinkingBlock), "redacted_thinking")]
 [JsonDerivedType(typeof(ToolUseBlock), "tool_use")]
 [JsonDerivedType(typeof(ToolResultBlock), "tool_result")]
+[JsonDerivedType(typeof(ImageBlock), "image")]
 public abstract record ContentBlock;
 
 public sealed record TextBlock(
@@ -21,6 +24,10 @@ public sealed record ThinkingBlock(
     [property: JsonPropertyName("signature")] string? Signature = null
 ) : ContentBlock;
 
+public sealed record RedactedThinkingBlock(
+    [property: JsonPropertyName("data")] string? Data = null
+) : ContentBlock;
+
 public sealed record ToolUseBlock(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("name")] string Name,
@@ -29,15 +36,28 @@ public sealed record ToolUseBlock(
 
 public sealed record ToolResultBlock(
     [property: JsonPropertyName("tool_use_id")] string ToolUseId,
-    [property: JsonPropertyName("content")] string? Content = null,
+    [property: JsonPropertyName("content")]
+    [property: JsonConverter(typeof(SystemContentConverter))] string? Content = null,
     [property: JsonPropertyName("is_error")] bool? IsError = null
 ) : ContentBlock;
+
+public sealed record ImageBlock(
+    [property: JsonPropertyName("source")] ImageSource Source
+) : ContentBlock;
+
+public sealed record ImageSource(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("media_type")] string? MediaType = null,
+    [property: JsonPropertyName("data")] string? Data = null,
+    [property: JsonPropertyName("url")] string? Url = null
+);
 
 // --- Messages ---
 
 public sealed record AnthropicMessage(
     [property: JsonPropertyName("role")] string Role,
-    [property: JsonPropertyName("content")] List<ContentBlock> Content
+    [property: JsonPropertyName("content")]
+    [property: JsonConverter(typeof(MessageContentConverter))] List<ContentBlock> Content
 );
 
 // --- Thinking Config (in request body) ---
@@ -66,14 +86,21 @@ public sealed record AnthropicMessagesRequest(
     [property: JsonPropertyName("stream")] bool Stream = false,
     [property: JsonPropertyName("thinking")] AnthropicThinking? Thinking = null,
     [property: JsonPropertyName("tools")] List<AnthropicTool>? Tools = null,
-    [property: JsonPropertyName("temperature")] double? Temperature = null
+    [property: JsonPropertyName("tool_choice")] JsonElement? ToolChoice = null,
+    [property: JsonPropertyName("temperature")] double? Temperature = null,
+    [property: JsonPropertyName("top_p")] double? TopP = null,
+    [property: JsonPropertyName("top_k")] int? TopK = null,
+    [property: JsonPropertyName("stop_sequences")] List<string>? StopSequences = null,
+    [property: JsonPropertyName("metadata")] JsonElement? Metadata = null
 );
 
 // --- Usage ---
 
 public sealed record AnthropicUsage(
     [property: JsonPropertyName("input_tokens")] int InputTokens,
-    [property: JsonPropertyName("output_tokens")] int OutputTokens
+    [property: JsonPropertyName("output_tokens")] int OutputTokens,
+    [property: JsonPropertyName("cache_creation_input_tokens")] int? CacheCreationInputTokens = null,
+    [property: JsonPropertyName("cache_read_input_tokens")] int? CacheReadInputTokens = null
 );
 
 // --- Response (non-streaming) ---
@@ -85,6 +112,7 @@ public sealed record AnthropicMessagesResponse(
     [property: JsonPropertyName("content")] List<ContentBlock> Content,
     [property: JsonPropertyName("model")] string Model,
     [property: JsonPropertyName("stop_reason")] string? StopReason = null,
+    [property: JsonPropertyName("stop_sequence")] string? StopSequence = null,
     [property: JsonPropertyName("usage")] AnthropicUsage? Usage = null
 );
 
@@ -138,6 +166,16 @@ public sealed record SseThinkingDelta(
     [property: JsonPropertyName("thinking")] string Thinking
 );
 
+public sealed record SseInputJsonDelta(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("partial_json")] string PartialJson
+);
+
+public sealed record SseSignatureDelta(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("signature")] string Signature
+);
+
 public sealed record SseContentBlockDelta(
     [property: JsonPropertyName("type")] string Type,
     [property: JsonPropertyName("index")] int Index,
@@ -150,7 +188,8 @@ public sealed record SseContentBlockStop(
 );
 
 public sealed record SseMessageDeltaPayload(
-    [property: JsonPropertyName("stop_reason")] string? StopReason = null
+    [property: JsonPropertyName("stop_reason")] string? StopReason = null,
+    [property: JsonPropertyName("stop_sequence")] string? StopSequence = null
 );
 
 public sealed record SseMessageDelta(

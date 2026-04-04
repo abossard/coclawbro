@@ -56,6 +56,11 @@ public static class DebugLogger
 
     public static void Log(string category, string message)
     {
+        // Bridge to ConsoleLogger in headless mode so all debug instrumentation
+        // automatically flows to stdout without duplicating call sites.
+        if (Headless)
+            ConsoleLogger.Log(category, message);
+
         if (!IsEnabled) return;
         lock (Lock)
         {

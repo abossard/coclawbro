@@ -49,11 +49,21 @@ public sealed class ProxyHandler
         int? thinkingBudget = null;
         bool isStreaming = false;
 
+        // Generate a request ID for correlation (LiteLLM/Anthropic compatibility)
+        var requestId = Guid.NewGuid().ToString();
+        ctx.Response.Headers["request-id"] = requestId;
+        ctx.Response.Headers["x-request-id"] = requestId;
+        ctx.Response.Headers["anthropic-version"] = "2023-06-01";
+
         try
         {
+            // Log anthropic-beta header if present
+            if (ctx.Request.Headers.TryGetValue("anthropic-beta", out var betaHeader))
+                DebugLogger.Log("HEADERS", $"anthropic-beta: {betaHeader}");
+
             // Parse Anthropic request
             var body = await new StreamReader(ctx.Request.Body).ReadToEndAsync();
-            DebugLogger.Log("PROXY", $"← Incoming {ctx.Request.Method} {ctx.Request.Path} ({body.Length} bytes)");
+            DebugLogger.Log("PROXY", $"← Incoming {ctx.Request.Method} {ctx.Request.Path} ({body.Length} bytes) req={requestId[..8]}");
 
             var request = JsonSerializer.Deserialize(body, AppJsonContext.App.AnthropicMessagesRequest);
             if (request is null)
@@ -85,6 +95,20 @@ public sealed class ProxyHandler
             var json = JsonSerializer.Serialize(openAiRequest, AppJsonContext.App.OpenAiChatRequest);
             DebugLogger.LogRequest("POST", Constants.CopilotApi.ChatCompletionsPath, json.Length,
                 json.Length < 800 ? json : null);
+
+            // Log tool definitions being sent upstream (helps debug tool call issues)
+            if (openAiRequest.Tools is { Count: > 0 })
+            {
+                DebugLogger.Log("TOOLS-OUT", $"Sending {openAiRequest.Tools.Count} tool definitions");
+                foreach (var t in openAiRequest.Tools.Take(5))
+                {
+                    var paramJson = t.Function.Parameters is not null
+                        ? JsonSerializer.Serialize(t.Function.Parameters, AppJsonContext.App.DictionaryStringObject)
+                        : "null";
+                    DebugLogger.Log("TOOLS-OUT", $"  {t.Function.Name}: params={paramJson[..Math.Min(paramJson.Length, 300)]}");
+                }
+            }
+
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _copilot.SendChatCompletionAsync(content, isStreaming, ctx.RequestAborted);
@@ -272,5 +296,8 @@ public sealed class ProxyHandler
             HttpStatus: httpStatus,
             IsStreaming: isStreaming,
             Error: error));
+
+        ConsoleLogger.LogRequest(requestModel, upstreamModel,
+            isStreaming, httpStatus, sw.Elapsed, inputTokens, outputTokens, error);
     }
 }
